@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/splashFragment">
+
+    <fragment
+        android:id="@+id/splashFragment"
+        android:name="com.shubham.maap.SplashFragment"
+        tools:layout="@layout/fragment_splash">
+        <action
+            android:id="@+id/action_splashFragment_to_homeFragment"
+            app:destination="@id/homeFragment"
+            app:popUpTo="@id/splashFragment"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/homeFragment"
+        android:name="com.shubham.maap.HomeFragment"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_homeFragment_to_measureFragment"
+            app:destination="@id/measureFragment" />
+        <action
+            android:id="@+id/action_homeFragment_to_arMeasureFragment"
+            app:destination="@id/arMeasureFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/measureFragment"
+        android:name="com.shubham.maap.MeasureFragment"
+        tools:layout="@layout/fragment_measure" />
+
+    <fragment
+        android:id="@+id/arMeasureFragment"
+        android:name="com.shubham.maap.ArMeasureFragment"
+        tools:layout="@layout/fragment_ar_measure" />
+</navigation>

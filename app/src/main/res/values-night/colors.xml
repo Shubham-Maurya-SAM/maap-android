@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--  Semantic mappings for Dark Mode  -->
+    <color name="background">#0F172A</color> <!-- Navy as background in dark mode -->
+    <color name="surface">#1E293B</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="divider">#334155</color>
+</resources>

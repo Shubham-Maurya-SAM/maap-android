@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--  res/values/colors.xml  -->
+<!--  Maap (माप) — Official brand colors v1  -->
+<!--  Source: maap-brand-sheet-v1.pdf  -->
+<resources>
+    <!--  Primary brand colors  -->
+    <color name="navy">#0F172A</color>
+    <color name="blue">#2563EB</color>
+    <color name="blue_dark">#1A4FBE</color>
+    <color name="blue_light">#EFF4FF</color>
+    <color name="light_gray">#E2E8F0</color>
+    <color name="white">#FFFFFF</color>
+
+    <!--  Semantic mappings  -->
+    <color name="background">#F1F5F9</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_dark">#0F172A</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#334155</color> <!-- Darkened from #475569 for WCAG 4.5:1 -->
+    <color name="text_hint">#576574</color> <!-- Darkened from #94A3B8 for WCAG 4.5:1 -->
+    <color name="text_on_blue">#FFFFFF</color>
+    <color name="text_on_navy">#FFFFFF</color>
+    <color name="divider">#E2E8F0</color>
+    <color name="success">#16A34A</color>
+    <color name="success_bg">#F0FDF4</color>
+
+    <!--  Icon circle background  -->
+    <color name="icon_bg">#EFF4FF</color>
+
+    <!-- Keeping older colors if they were used (optional, but safer) -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+</resources>

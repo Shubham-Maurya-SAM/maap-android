@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/navy">
+
+    <!-- Logo Mark -->
+    <ImageView
+        android:id="@+id/iv_splash_logo"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:src="@drawable/ic_logo_mark"
+        android:contentDescription="@string/desc_app_logo"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.4"
+        app:tint="@color/white" />
+
+    <!-- English Name -->
+    <TextView
+        android:id="@+id/tv_splash_name_en"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:alpha="0"
+        android:letterSpacing="0.1"
+        android:text="@string/app_name"
+        android:textColor="@color/white"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/iv_splash_logo" />
+
+    <!-- Hindi Name -->
+    <TextView
+        android:id="@+id/tv_splash_name_hi"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:alpha="0"
+        android:text="@string/app_tagline_hindi_short"
+        android:textColor="@color/white"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="@id/tv_splash_name_en"
+        app:layout_constraintEnd_toEndOf="@id/tv_splash_name_en"
+        app:layout_constraintStart_toStartOf="@id/tv_splash_name_en"
+        app:layout_constraintTop_toTopOf="@id/tv_splash_name_en" />
+
+    <!-- Simulated Measuring Tape Line -->
+    <View
+        android:id="@+id/v_tape_line"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="8dp"
+        android:background="@color/blue"
+        android:alpha="0"
+        app:layout_constraintEnd_toEndOf="@id/tv_splash_name_en"
+        app:layout_constraintStart_toStartOf="@id/tv_splash_name_en"
+        app:layout_constraintTop_toBottomOf="@id/tv_splash_name_en" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

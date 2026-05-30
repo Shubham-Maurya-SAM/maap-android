@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--  res/values/strings.xml  -->
+<!--  Maap (माप) — Official brand copy  -->
+<resources>
+    <string name="app_name">MAAP</string>
+    <string name="app_tagline">MEASURE SMARTER.</string>
+    <string name="app_tagline_hindi">माप · Know your space</string>
+    <string name="app_tagline_hindi_short">माप</string>
+
+    <!--  Home screen  -->
+    <string name="home_title">MAAP</string>
+    <string name="home_subtitle">MEASURE SMARTER.</string>
+    <string name="btn_new_measurement"> New Measurement</string>
+    <string name="no_measurements">No measurements yet.\nTap the button below to measure your first room.</string>
+    <string name="total_rooms">Rooms measured</string>
+    <string name="total_area">Total area</string>
+
+    <!--  Measure screen  -->
+    <string name="measure_title">New Measurement</string>
+    <string name="room_name_hint">Room name (e.g. Bedroom / बेडरूम)</string>
+    <string name="select_shape">Room shape (आकार चुनें)</string>
+    <string name="shape_rectangle">Rectangle (आयत)</string>
+    <string name="shape_lshape">L-Shape</string>
+    <string name="shape_tshape">T-Shape</string>
+    <string name="shape_triangle">Triangle (त्रिकोण)</string>
+    <string name="shape_custom">Custom (अन्य)</string>
+    <string name="num_sides_hint">Number of sides (भुजाओं की संख्या)</string>
+    <string name="side_label">Side %1$d (भुजा %1$d)</string>
+    <string name="length_hint">Length (feet / फुट)</string>
+    <string name="width_hint">Width (feet / फुट)</string>
+    <string name="length2_hint">Length 2 (feet)</string>
+    <string name="width2_hint">Width 2 (feet)</string>
+    <string name="btn_calculate">Calculate Area</string>
+    <string name="btn_save">Save Measurement</string>
+    <string name="btn_cancel">Cancel</string>
+
+    <!--  Result  -->
+    <string name="result_title">Carpet Area</string>
+    <string name="carpet_area_label">कारपेट एरिया</string>
+    <string name="carpet_tiles">Carpet tiles needed (approx)</string>
+    <string name="paint_estimate">Paint needed for walls (approx)</string>
+    <string name="btn_share">Share via WhatsApp</string>
+    <string name="btn_save_result">Save Measurement</string>
+
+    <!--  Errors  -->
+    <string name="error_enter_length">Please enter length</string>
+    <string name="error_enter_width">Please enter width</string>
+    <string name="error_invalid_number">Please enter a valid number</string>
+    <string name="error_too_large">Value seems too large — please check</string>
+    <string name="error_enter_name">Please enter a room name</string>
+
+    <!--  Delete  -->
+    <string name="delete_confirm">Delete this measurement?</string>
+    <string name="delete_yes">Delete</string>
+    <string name="delete_no">Cancel</string>
+    <!-- Accessibility -->
+    <string name="desc_app_logo">MAAP brand logo</string>
+    <string name="desc_delete_measurement">Delete measurement for %1$s</string>
+    <string name="desc_add_corner">Add current point as a corner</string>
+    <string name="desc_reset_ar">Clear all measurement points</string>
+    <string name="acc_point_added">Point added</string>
+    <string name="acc_area_calculated">Total area is %1$s</string>
+    <string name="tab_measure">Measure</string>
+    <string name="tab_history">History</string>
+    <string name="open_ar_view">Open AR View</string>
+    <string name="manual_input_title">Manual Input</string>
+    <string name="rect_label">Rect</string>
+    <string name="l_shape_label">L-Shape</string>
+    <string name="calculate_save">Calculate and Save</string>
+    <string name="real_time_ar">Real-time AR</string>
+    <string name="zero_area">0.0 sq ft</string>
+    <string name="zero_count">0</string>
+    <string name="ruler_emoji">📐</string>
+    <string name="ar_scan_instruction">Point camera at floor and scan</string>
+    <string name="estimated_area_label">Estimated Area</string>
+</resources>
