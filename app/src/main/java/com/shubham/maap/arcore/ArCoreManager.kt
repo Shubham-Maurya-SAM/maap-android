@@ -1,44 +1,69 @@
 package com.shubham.maap.arcore
 
 import android.content.Context
+import android.util.Log
 import com.google.ar.core.*
-import com.google.ar.core.exceptions.CameraNotAvailableException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * Handles ARCore session logic, tracking, and hit testing.
+ * Singleton to allow early initialization (warm-up).
  */
-class ArCoreManager(private val context: Context) {
+class ArCoreManager private constructor(context: Context) {
 
+    private val appContext = context.applicationContext
     var session: Session? = null
         private set
 
     fun setupSession(): Session? {
+        if (session != null) return session
+        
         try {
-            session = Session(context)
+            session = Session(appContext)
             val config = Config(session).apply {
-                planeFindingMode = Config.PlaneFindingMode.HORIZONTAL
+                planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
                 focusMode = Config.FocusMode.AUTO
                 updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
-                // Enabled for low-end device optimization if supported
                 lightEstimationMode = Config.LightEstimationMode.DISABLED
             }
             session?.configure(config)
-        } catch (_: Exception) {
+            Log.d("ArCoreManager", "ARCore Session initialized")
+        } catch (e: Exception) {
+            Log.e("ArCoreManager", "Failed to create ARCore session", e)
             return null
         }
         return session
     }
 
-    fun resume() {
-        try {
+    /**
+     * Pre-initialize the session in background to reduce lag when opening AR view.
+     */
+    fun warmUp() {
+        CoroutineScope(Dispatchers.IO).launch {
+            if (session == null) {
+                setupSession()
+            }
+        }
+    }
+
+    fun resume(): Boolean {
+        return try {
             session?.resume()
-        } catch (e: CameraNotAvailableException) {
-            e.printStackTrace()
+            true
+        } catch (e: Exception) {
+            Log.e("ArCoreManager", "Failed to resume ARCore session", e)
+            false
         }
     }
 
     fun pause() {
-        session?.pause()
+        try {
+            session?.pause()
+        } catch (e: Exception) {
+            Log.e("ArCoreManager", "Failed to pause ARCore session", e)
+        }
     }
 
     fun close() {
@@ -46,14 +71,28 @@ class ArCoreManager(private val context: Context) {
         session = null
     }
 
-    /**
-     * Performs a hit test in the center of the screen to find a horizontal floor plane.
-     */
     fun hitTestCenter(frame: Frame, width: Int, height: Int): HitResult? {
-        val hits = frame.hitTest(width / 2f, height / 2f)
-        return hits.firstOrNull { hit ->
-            val trackable = hit.trackable
-            (trackable is Plane) && trackable.isPoseInPolygon(hit.hitPose) && (trackable.type == Plane.Type.HORIZONTAL_UPWARD_FACING)
+        if (width <= 0 || height <= 0) return null
+        
+        return try {
+            val hits = frame.hitTest(width / 2f, height / 2f)
+            hits.firstOrNull { hit ->
+                val trackable = hit.trackable
+                (trackable is Plane) && trackable.isPoseInPolygon(hit.hitPose)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: ArCoreManager? = null
+
+        fun getInstance(context: Context): ArCoreManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: ArCoreManager(context).also { INSTANCE = it }
+            }
         }
     }
 }

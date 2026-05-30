@@ -1,16 +1,26 @@
 package com.shubham.maap
 
 import android.Manifest
+import android.content.ContentValues
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
+import android.provider.MediaStore
 import android.view.LayoutInflater
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.createBitmap
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -18,11 +28,18 @@ import androidx.navigation.fragment.findNavController
 import com.google.ar.core.Frame
 import com.shubham.maap.arcore.ArCoreManager
 import com.shubham.maap.databinding.FragmentArMeasureBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.util.*
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.util.Locale
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
+import kotlin.coroutines.resume
 
 /**
  * Fragment responsible for AR-based room measurement.
@@ -57,7 +74,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        arCoreManager = ArCoreManager(requireContext())
+        arCoreManager = ArCoreManager.getInstance(requireContext())
 
         setupGlView()
         setupUI()
@@ -78,11 +95,18 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
             addPointRequested = true
         }
 
-        binding.btnReset.setOnClickListener {
-            viewModel.reset()
+        binding.btnReset.apply {
+            setText(R.string.btn_cancel)
+            setOnClickListener {
+                findNavController().popBackStack()
+            }
         }
 
         binding.btnSaveAr.setOnClickListener {
+            saveAndExit()
+        }
+
+        binding.btnEncloseArea.setOnClickListener {
             saveAndExit()
         }
     }
@@ -90,47 +114,148 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
     private fun observeViewModel() {
         lifecycleScope.launch {
             viewModel.currentAreaSqFt.collectLatest { area ->
-                binding.tvLiveArea.text = String.format(Locale.getDefault(), "%.2f sq ft", area)
-                updateInstructions()
+                _binding?.let { b ->
+                    b.tvLiveArea.text = String.format(Locale.getDefault(), "%.2f sq ft", area)
+                    updateInstructions()
+                }
             }
         }
     }
 
     private fun updateInstructions() {
+        val b = _binding ?: return
         val count = viewModel.anchors.value.size
-        binding.tvInstruction.text = when (count) {
-            0 -> "Find floor and add first corner"
-            1 -> "Add next corner"
-            2 -> "Add one more corner to see area"
-            else -> "Add more corners or Save"
+        
+        b.btnEncloseArea.isVisible = count >= 3
+
+        if (count > 0) {
+            b.tvInstruction.text = when (count) {
+                1 -> "Add next point for distance"
+                else -> "Add more corners for area or Save"
+            }
         }
     }
 
     private fun saveAndExit() {
-        if (viewModel.anchors.value.size < 3) {
-            Toast.makeText(context, "Need at least 3 corners", Toast.LENGTH_SHORT).show()
+        val anchors = viewModel.anchors.value
+        if (anchors.size < 2) {
+            Toast.makeText(context, "Need at least 2 points", Toast.LENGTH_SHORT).show()
             return
         }
         lifecycleScope.launch {
+            val imagePath = captureAndSaveScreenshot()
             val db = AppDatabase.getDatabase(requireContext())
-            val count = viewModel.anchors.value.size
+            
+            val isPolygon = anchors.size >= 3
+            val shape = if (isPolygon) "AR Polygon" else "AR Distance"
+            
+            val dimensions = if (isPolygon) {
+                "${anchors.size} corners"
+            } else {
+                val dist = com.shubham.maap.measurement.GeometryUtils.calculateDistance(anchors[0].pose, anchors[1].pose)
+                String.format(Locale.getDefault(), "%.2f ft", com.shubham.maap.measurement.GeometryUtils.metersToFeet(dist))
+            }
+
+            val area = if (isPolygon) viewModel.currentAreaSqFt.value else 0.0
+
             db.measurementDao().insert(
                 Measurement(
                     roomName = "AR ${System.currentTimeMillis() % 10000}",
-                    shape = "AR Polygon",
-                    dimensions = "$count corners",
-                    area = viewModel.currentAreaSqFt.value,
+                    shape = shape,
+                    dimensions = dimensions,
+                    area = area,
+                    imagePath = imagePath
                 ),
             )
+            Toast.makeText(context, "Saved with screenshot", Toast.LENGTH_SHORT).show()
             findNavController().popBackStack()
         }
     }
 
+    private fun saveImageToGallery(bitmap: Bitmap) {
+        val context = requireContext()
+        val filename = "MAAP_${System.currentTimeMillis()}.jpg"
+        var fos: OutputStream? = null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            context.contentResolver?.also { resolver ->
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "DCIM/MAAP")
+                }
+                val imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                fos = imageUri?.let { resolver.openOutputStream(it) }
+            }
+        } else {
+            val imagesDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DCIM).toString() + File.separator + "MAAP"
+            val file = File(imagesDir)
+            if (!file.exists()) file.mkdir()
+            val image = File(imagesDir, filename)
+            fos = FileOutputStream(image)
+        }
+
+        fos?.use {
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
+            activity?.runOnUiThread {
+                Toast.makeText(context, "Saved to Gallery", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private suspend fun captureAndSaveScreenshot(): String? = suspendCancellableCoroutine { continuation ->
+        val view = binding.surfaceView
+        val bitmap = createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        
+        val handlerThread = HandlerThread("PixelCopy")
+        handlerThread.start()
+        
+        PixelCopy.request(view, bitmap, { result ->
+            if (result == PixelCopy.SUCCESS) {
+                // Combine with overlay
+                val combinedBitmap = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(combinedBitmap)
+                canvas.drawBitmap(bitmap, 0f, 0f, null)
+                binding.measurementOverlay.draw(canvas)
+                
+                // Save to internal storage for app use
+                val file = File(requireContext().filesDir, "meas_${System.currentTimeMillis()}.jpg")
+                
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        FileOutputStream(file).use { out ->
+                            combinedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        }
+                        
+                        // Also save to Gallery
+                        saveImageToGallery(combinedBitmap)
+                        
+                        continuation.resume(file.absolutePath)
+                    } catch (_: Exception) {
+                        continuation.resume(null)
+                    }
+                }
+            } else {
+                continuation.resume(null)
+            }
+            handlerThread.quitSafely()
+        }, Handler(handlerThread.looper))
+    }
+
     private fun resumeAR() {
         if (arCoreManager.session == null) {
-            arCoreManager.setupSession()
+            if (arCoreManager.setupSession() == null) {
+                Toast.makeText(context, "ARCore not supported on this device", Toast.LENGTH_SHORT).show()
+                findNavController().popBackStack()
+                return
+            }
         }
-        arCoreManager.resume()
+        if (!arCoreManager.resume()) {
+            Toast.makeText(context, "Failed to start camera", Toast.LENGTH_SHORT).show()
+            findNavController().popBackStack()
+        } else {
+            binding.surfaceView.onResume()
+        }
     }
 
     override fun onResume() {
@@ -144,6 +269,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
 
     override fun onPause() {
         super.onPause()
+        binding.surfaceView.onPause()
         arCoreManager.pause()
     }
 
@@ -187,16 +313,40 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
     }
 
     private fun processARFrame(frame: Frame) {
+        val binding = _binding ?: return
+        
         // 1. Plane detection check
         val hit = arCoreManager.hitTestCenter(frame, binding.surfaceView.width, binding.surfaceView.height)
         val isPlaneFound = hit != null
+        
+        // Live Instruction Logic
+        if (viewModel.anchors.value.isEmpty()) {
+            activity?.runOnUiThread {
+                val currentText = _binding?.tvInstruction?.text.toString()
+                val newText = if (isPlaneFound) "Add corners" else "Detecting floor..."
+                
+                if (currentText != newText) {
+                    _binding?.tvInstruction?.text = newText
+                    if (isPlaneFound) {
+                        binding.tvInstruction.clearAnimation()
+                    } else {
+                        val animation = android.view.animation.AlphaAnimation(0.4f, 1.0f).apply {
+                            duration = 800
+                            repeatMode = android.view.animation.Animation.REVERSE
+                            repeatCount = android.view.animation.Animation.INFINITE
+                        }
+                        binding.tvInstruction.startAnimation(animation)
+                    }
+                }
+            }
+        }
         
         // 2. Handle point addition request
         if (addPointRequested && isPlaneFound) {
             viewModel.addPoint(hit.createAnchor())
             addPointRequested = false
             activity?.runOnUiThread {
-                binding.surfaceView.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                _binding?.surfaceView?.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
             }
         } else if (addPointRequested) {
             addPointRequested = false // Reset even if failed
@@ -217,13 +367,15 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
 
         // 4. Update UI overlay
         activity?.runOnUiThread {
-            binding.ivReticle.alpha = if (isPlaneFound) 1.0f else 0.4f
-            binding.measurementOverlay.updateData(
-                viewModel.anchors.value,
-                camera,
-                reticlePose,
-                pointCloudArray
-            )
+            _binding?.let { b ->
+                b.ivReticle.alpha = if (isPlaneFound) 1.0f else 0.4f
+                b.measurementOverlay.update(
+                    viewModel.anchors.value,
+                    camera,
+                    reticlePose,
+                    pointCloudArray,
+                )
+            }
         }
     }
 }

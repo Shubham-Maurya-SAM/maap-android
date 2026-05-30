@@ -1,10 +1,12 @@
 package com.shubham.maap
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -20,6 +22,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.shubham.maap.databinding.FragmentHomeBinding
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Locale
 
 /**
@@ -49,7 +52,7 @@ class HomeFragment : Fragment() {
         setupManualMeasure()
         setupHistory()
         
-        binding.cardArLaunch.setOnClickListener {
+        binding.btnLaunchArFixed.setOnClickListener {
             findNavController().navigate(R.id.action_homeFragment_to_arMeasureFragment)
         }
     }
@@ -186,6 +189,9 @@ class HomeFragment : Fragment() {
             },
             onEditClick = { measurement ->
                 showEditDialog(measurement)
+            },
+            onImageClick = { measurement ->
+                showFullImage(measurement)
             }
         )
 
@@ -208,29 +214,84 @@ class HomeFragment : Fragment() {
     }
 
     private fun showEditDialog(measurement: Measurement) {
-        val editText = TextInputEditText(requireContext()).apply {
-            setText(measurement.roomName)
-            hint = "New room name"
-        }
-        val container = LinearLayout(requireContext()).apply {
-            setPadding(24.toPx(), 24.toPx(), 24.toPx(), 0)
-            addView(editText, LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        val context = requireContext()
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val padding = 24.toPx()
+            setPadding(padding, padding, padding, 0)
         }
 
-        AlertDialog.Builder(requireContext())
-            .setTitle("Edit Room Name")
-            .setView(container)
+        val nameLayout = TextInputLayout(context).apply {
+            hint = "Room Name"
+        }
+        val nameEditText = TextInputEditText(context).apply {
+            setText(measurement.roomName)
+        }
+        nameLayout.addView(nameEditText)
+
+        val dimsLayout = TextInputLayout(context).apply {
+            hint = "Dimensions"
+            setPadding(0, 8.toPx(), 0, 0)
+        }
+        val dimsEditText = TextInputEditText(context).apply {
+            setText(measurement.dimensions)
+        }
+        dimsLayout.addView(dimsEditText)
+
+        val areaLayout = TextInputLayout(context).apply {
+            hint = "Area (sq ft)"
+            setPadding(0, 8.toPx(), 0, 0)
+        }
+        val areaEditText = TextInputEditText(context).apply {
+            setText(measurement.area.toString())
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        areaLayout.addView(areaEditText)
+
+        layout.addView(nameLayout)
+        layout.addView(dimsLayout)
+        layout.addView(areaLayout)
+
+        AlertDialog.Builder(context)
+            .setTitle("Edit Measurement")
+            .setView(layout)
             .setPositiveButton("Update") { _, _ ->
-                val newName = editText.text.toString()
+                val newName = nameEditText.text.toString()
+                val newDims = dimsEditText.text.toString()
+                val newArea = areaEditText.text.toString().toDoubleOrNull() ?: measurement.area
+
                 if (newName.isNotBlank()) {
                     lifecycleScope.launch {
-                        val dao = AppDatabase.getDatabase(requireContext()).measurementDao()
-                        dao.insert(measurement.copy(roomName = newName))
-                        Toast.makeText(requireContext(), "Updated", Toast.LENGTH_SHORT).show()
+                        val dao = AppDatabase.getDatabase(context).measurementDao()
+                        dao.insert(measurement.copy(
+                            roomName = newName,
+                            dimensions = newDims,
+                            area = newArea
+                        ))
+                        Toast.makeText(context, "Updated", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
             .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showFullImage(measurement: Measurement) {
+        val path = measurement.imagePath ?: return
+        val imgFile = File(path)
+        if (!imgFile.exists()) return
+
+        val context = requireContext()
+        val imageView = ImageView(context).apply {
+            val bitmap = BitmapFactory.decodeFile(imgFile.absolutePath)
+            setImageBitmap(bitmap)
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+
+        AlertDialog.Builder(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+            .setView(imageView)
+            .setPositiveButton("Close", null)
             .show()
     }
 

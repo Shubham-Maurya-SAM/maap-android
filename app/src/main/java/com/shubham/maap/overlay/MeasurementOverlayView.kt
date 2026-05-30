@@ -14,6 +14,7 @@ import java.util.*
 
 /**
  * 2D Canvas overlay for drawing AR measurement lines, markers, and labels.
+ * Performance optimized to avoid allocations in onDraw.
  */
 class MeasurementOverlayView @JvmOverloads constructor(
     context: Context,
@@ -41,11 +42,20 @@ class MeasurementOverlayView @JvmOverloads constructor(
         textAlign = Paint.Align.CENTER
         typeface = Typeface.DEFAULT_BOLD
         setShadowLayer(4f, 0f, 0f, Color.BLACK)
+        isAntiAlias = true
     }
 
     private val polygonFillPaint = Paint().apply {
         color = Color.argb(60, 37, 99, 235) // Translucent Electric Blue
         style = Paint.Style.FILL
+        isAntiAlias = true
+    }
+
+    private val cloudPaint = Paint().apply {
+        color = Color.WHITE
+        alpha = 100
+        strokeWidth = 5f
+        strokeCap = Paint.Cap.ROUND
     }
 
     private var anchors: List<Anchor> = emptyList()
@@ -54,10 +64,17 @@ class MeasurementOverlayView @JvmOverloads constructor(
     private var pointCloudArray: FloatArray? = null
     private val polygonPath = Path()
 
+    // Pre-allocate arrays for projection to avoid GC pressure
+    private val viewMatrix = FloatArray(16)
+    private val projMatrix = FloatArray(16)
+    private val viewCoords = FloatArray(4)
+    private val clipCoords = FloatArray(4)
+    private val worldCoords = FloatArray(4)
+
     /**
      * Updates the rendering data. Should be called on UI thread.
      */
-    fun updateData(
+    fun update(
         anchors: List<Anchor>,
         camera: Camera?,
         reticlePose: Pose? = null,
@@ -106,9 +123,15 @@ class MeasurementOverlayView @JvmOverloads constructor(
                     val next = screenPoints[i + 1]
                     canvas.drawLine(current.x, current.y, next.x, next.y, linePaint)
                     
-                    // Distance label for the segment
                     val dist = GeometryUtils.calculateDistance(anchors[i].pose, anchors[i + 1].pose)
                     drawDistanceLabel(canvas, current, next, dist)
+                } else if (screenPoints.size >= 3) {
+                    // Draw closing line for polygon
+                    val first = screenPoints[0]
+                    canvas.drawLine(current.x, current.y, first.x, first.y, linePaint)
+                    
+                    val dist = GeometryUtils.calculateDistance(anchors.last().pose, anchors.first().pose)
+                    drawDistanceLabel(canvas, current, first, dist)
                 }
             }
             
@@ -127,12 +150,15 @@ class MeasurementOverlayView @JvmOverloads constructor(
 
     private fun drawScanningDots(canvas: Canvas, camera: Camera) {
         val points = pointCloudArray ?: return
-        val paint = Paint().apply { color = Color.WHITE; alpha = 100 }
         // Step 16 to reduce dots on low-end devices
         for (i in 0 until points.size step 16) {
-            val pose = Pose(floatArrayOf(points[i], points[i + 1], points[i + 2]), floatArrayOf(0f, 0f, 0f, 1f))
-            projectPoint(pose, camera)?.let {
-                canvas.drawPoint(it.x, it.y, paint)
+            worldCoords[0] = points[i]
+            worldCoords[1] = points[i+1]
+            worldCoords[2] = points[i+2]
+            worldCoords[3] = 1f
+            
+            projectPointFromWorld(worldCoords, camera)?.let {
+                canvas.drawPoint(it.x, it.y, cloudPaint)
             }
         }
     }
@@ -146,16 +172,18 @@ class MeasurementOverlayView @JvmOverloads constructor(
     }
 
     private fun projectPoint(pose: Pose, camera: Camera): PointF? {
-        val viewMatrix = FloatArray(16)
-        val projMatrix = FloatArray(16)
+        worldCoords[0] = pose.tx()
+        worldCoords[1] = pose.ty()
+        worldCoords[2] = pose.tz()
+        worldCoords[3] = 1f
+        return projectPointFromWorld(worldCoords, camera)
+    }
+
+    private fun projectPointFromWorld(worldCoords: FloatArray, camera: Camera): PointF? {
         camera.getViewMatrix(viewMatrix, 0)
         camera.getProjectionMatrix(projMatrix, 0, 0.1f, 100f)
 
-        val worldCoords = floatArrayOf(pose.tx(), pose.ty(), pose.tz(), 1f)
-        val viewCoords = FloatArray(4)
         Matrix.multiplyMV(viewCoords, 0, viewMatrix, 0, worldCoords, 0)
-        
-        val clipCoords = FloatArray(4)
         Matrix.multiplyMV(clipCoords, 0, projMatrix, 0, viewCoords, 0)
 
         if (clipCoords[3] <= 0f) return null

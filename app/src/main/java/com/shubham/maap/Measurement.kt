@@ -8,7 +8,8 @@ data class Measurement(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val roomName: String,
     val shape: String,
-    val dimensions: String = "", // Added to store e.g. "10 x 12 ft"
+    val dimensions: String = "",
     val area: Double,
+    val imagePath: String? = null, // Path to the saved screenshot
     val timestamp: Long = System.currentTimeMillis(),
 )

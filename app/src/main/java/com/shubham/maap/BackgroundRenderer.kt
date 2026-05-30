@@ -42,7 +42,7 @@ class BackgroundRenderer {
          1.0f,  1.0f, 0.0f
     )
 
-    private val texCoords = floatArrayOf(
+    private val initialTexCoords = floatArrayOf(
         0.0f, 1.0f,
         0.0f, 0.0f,
         1.0f, 1.0f,
@@ -50,7 +50,7 @@ class BackgroundRenderer {
     )
 
     private lateinit var vertexBuffer: FloatBuffer
-    private lateinit var texCoordBuffer: FloatBuffer
+    private lateinit var transformedTexCoordBuffer: FloatBuffer
 
     fun createOnGlThread() {
         val textures = IntArray(1)
@@ -59,8 +59,8 @@ class BackgroundRenderer {
         GLES20.glBindTexture(textureTarget, textureId)
         GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
         GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
-        GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST)
-        GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST)
+        GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+        GLES20.glTexParameteri(textureTarget, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
 
         val vertexShader = loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode)
         val fragmentShader = loadShader(GLES20.GL_FRAGMENT_SHADER, fragmentShaderCode)
@@ -69,21 +69,23 @@ class BackgroundRenderer {
         GLES20.glAttachShader(program, vertexShader)
         GLES20.glAttachShader(program, fragmentShader)
         GLES20.glLinkProgram(program)
-        GLES20.glUseProgram(program)
-
+        
         positionAttrib = GLES20.glGetAttribLocation(program, "a_Position")
         texCoordAttrib = GLES20.glGetAttribLocation(program, "a_TexCoord")
 
         vertexBuffer = ByteBuffer.allocateDirect(quadCoords.size * 4)
             .order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(quadCoords); position(0) }
-        texCoordBuffer = ByteBuffer.allocateDirect(texCoords.size * 4)
-            .order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(texCoords); position(0) }
+            
+        transformedTexCoordBuffer = ByteBuffer.allocateDirect(initialTexCoords.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer()
     }
 
     fun draw(frame: Frame) {
-        if (frame.hasDisplayGeometryChanged()) {
-            frame.transformDisplayUvCoords(texCoordBuffer, texCoordBuffer) // This needs a FloatBuffer
-        }
+        val tempBuffer = ByteBuffer.allocateDirect(initialTexCoords.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer().apply { put(initialTexCoords); position(0) }
+            
+        @Suppress("DEPRECATION")
+        frame.transformDisplayUvCoords(tempBuffer, transformedTexCoordBuffer)
 
         GLES20.glDisable(GLES20.GL_DEPTH_TEST)
         GLES20.glDepthMask(false)
@@ -92,7 +94,7 @@ class BackgroundRenderer {
         GLES20.glBindTexture(textureTarget, textureId)
 
         GLES20.glVertexAttribPointer(positionAttrib, 3, GLES20.GL_FLOAT, false, 0, vertexBuffer)
-        GLES20.glVertexAttribPointer(texCoordAttrib, 2, GLES20.GL_FLOAT, false, 0, texCoordBuffer)
+        GLES20.glVertexAttribPointer(texCoordAttrib, 2, GLES20.GL_FLOAT, false, 0, transformedTexCoordBuffer)
         GLES20.glEnableVertexAttribArray(positionAttrib)
         GLES20.glEnableVertexAttribArray(texCoordAttrib)
 
@@ -108,6 +110,13 @@ class BackgroundRenderer {
         return GLES20.glCreateShader(type).also { shader ->
             GLES20.glShaderSource(shader, code)
             GLES20.glCompileShader(shader)
+            
+            val compileStatus = IntArray(1)
+            GLES20.glGetShaderiv(shader, GLES20.GL_COMPILE_STATUS, compileStatus, 0)
+            if (compileStatus[0] == 0) {
+                GLES20.glDeleteShader(shader)
+                return 0
+            }
         }
     }
 }

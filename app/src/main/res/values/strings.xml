@@ -73,4 +73,8 @@
     <string name="ruler_emoji">📐</string>
     <string name="ar_scan_instruction">Point camera at floor and scan</string>
     <string name="estimated_area_label">Estimated Area</string>
+    <string name="btn_enclose_area">Enclose Area</string>
+    <string name="btn_save_short">SAVE</string>
+    <string name="btn_start_ar">START AR</string>
+    <string name="desc_camera_lens">Start AR Camera</string>
 </resources>

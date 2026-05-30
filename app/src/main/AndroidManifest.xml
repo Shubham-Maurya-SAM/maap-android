@@ -3,6 +3,8 @@
     package="com.shubham.maap">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.ar" android:required="true" />
 
@@ -20,7 +22,7 @@
         <activity
             android:name="com.shubham.maap.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.MAAP.Splash">
+            android:theme="@style/Theme.MAAP">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
