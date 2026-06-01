@@ -29,12 +29,15 @@ class MeasureViewModel : ViewModel() {
     }
 
     /**
-     * Clears all measurements.
+     * Removes the last added point.
      */
-    fun reset() {
-        _anchors.value.forEach { it.detach() }
-        _anchors.value = emptyList()
-        _currentAreaSqFt.value = 0.0
+    fun removeLastPoint() {
+        val currentList = _anchors.value.toMutableList()
+        if (currentList.isNotEmpty()) {
+            currentList.removeAt(currentList.size - 1).detach()
+            _anchors.value = currentList
+            recalculateArea()
+        }
     }
 
     private fun recalculateArea() {

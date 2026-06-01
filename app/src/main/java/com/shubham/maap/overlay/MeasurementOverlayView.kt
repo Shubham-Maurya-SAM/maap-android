@@ -70,6 +70,9 @@ class MeasurementOverlayView @JvmOverloads constructor(
     private val viewCoords = FloatArray(4)
     private val clipCoords = FloatArray(4)
     private val worldCoords = FloatArray(4)
+    
+    // Store label positions to avoid overlap
+    private val labelRects = mutableListOf<Rect>()
 
     /**
      * Updates the rendering data. Should be called on UI thread.
@@ -95,6 +98,9 @@ class MeasurementOverlayView @JvmOverloads constructor(
         drawScanningDots(canvas, camera)
 
         if (anchors.isEmpty()) return
+
+        // Clear label tracking for this frame
+        labelRects.clear()
 
         // 2. Project world anchors to screen coordinates
         val screenPoints = anchors.mapNotNull { projectPoint(it.pose, camera) }
@@ -164,11 +170,43 @@ class MeasurementOverlayView @JvmOverloads constructor(
     }
 
     private fun drawDistanceLabel(canvas: Canvas, p1: PointF, p2: PointF, distMeters: Float) {
-        val midX = (p1.x + p2.x) / 2
-        val midY = (p1.y + p2.y) / 2
         val distFeet = GeometryUtils.metersToFeet(distMeters)
         val text = String.format(Locale.getDefault(), "%.2f ft", distFeet)
+        
+        val midX = (p1.x + p2.x) / 2
+        var midY = (p1.y + p2.y) / 2
+        
+        // Measure text size
+        val bounds = Rect()
+        labelPaint.getTextBounds(text, 0, text.length, bounds)
+        val textWidth = bounds.width()
+        val textHeight = bounds.height()
+        
+        // Initial label rect
+        val rect = Rect(
+            (midX - textWidth / 2 - 10).toInt(),
+            (midY - textHeight - 30).toInt(),
+            (midX + textWidth / 2 + 10).toInt(),
+            (midY - 10).toInt()
+        )
+        
+        // Simple collision avoidance: shift vertically if overlapping
+        var attempts = 0
+        while (isOverlapping(rect) && attempts < 3) {
+            rect.offset(0, -textHeight - 10)
+            midY -= (textHeight + 10)
+            attempts++
+        }
+        
+        labelRects.add(Rect(rect))
         canvas.drawText(text, midX, midY - 20, labelPaint)
+    }
+
+    private fun isOverlapping(newRect: Rect): Boolean {
+        for (rect in labelRects) {
+            if (Rect.intersects(rect, newRect)) return true
+        }
+        return false
     }
 
     private fun projectPoint(pose: Pose, camera: Camera): PointF? {

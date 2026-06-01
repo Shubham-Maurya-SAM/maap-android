@@ -77,4 +77,8 @@
     <string name="btn_save_short">SAVE</string>
     <string name="btn_start_ar">START AR</string>
     <string name="desc_camera_lens">Start AR Camera</string>
+    <string name="btn_retake">RETAKE</string>
+    <string name="btn_confirm_save">CONFIRM &amp; SAVE</string>
+    <string name="desc_preview_img">Measurement preview</string>
+    <string name="btn_undo">UNDO</string>
 </resources>

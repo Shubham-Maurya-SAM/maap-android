@@ -28,11 +28,11 @@ import androidx.navigation.fragment.findNavController
 import com.google.ar.core.Frame
 import com.shubham.maap.arcore.ArCoreManager
 import com.shubham.maap.databinding.FragmentArMeasureBinding
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -55,6 +55,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
     private val backgroundRenderer = BackgroundRenderer()
     
     private var hasSetTexture = false
+    private var pendingBitmap: Bitmap? = null
     
     @Volatile
     private var addPointRequested = false
@@ -103,11 +104,25 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         }
 
         binding.btnSaveAr.setOnClickListener {
-            saveAndExit()
+            startSaveWorkflow()
         }
 
         binding.btnEncloseArea.setOnClickListener {
-            saveAndExit()
+            startSaveWorkflow()
+        }
+
+        binding.btnUndo.setOnClickListener {
+            viewModel.removeLastPoint()
+        }
+
+        // Preview Actions
+        binding.btnPreviewRetake.setOnClickListener {
+            binding.layoutSavePreview.isVisible = false
+            pendingBitmap = null
+        }
+
+        binding.btnPreviewSave.setOnClickListener {
+            finalizeSave()
         }
     }
 
@@ -127,6 +142,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         val count = viewModel.anchors.value.size
         
         b.btnEncloseArea.isVisible = count >= 3
+        b.btnUndo.isVisible = count > 0
 
         if (count > 0) {
             b.tvInstruction.text = when (count) {
@@ -136,16 +152,40 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         }
     }
 
-    private fun saveAndExit() {
+    private fun startSaveWorkflow() {
         val anchors = viewModel.anchors.value
         if (anchors.size < 2) {
             Toast.makeText(context, "Need at least 2 points", Toast.LENGTH_SHORT).show()
             return
         }
+        
         lifecycleScope.launch {
-            val imagePath = captureAndSaveScreenshot()
-            val db = AppDatabase.getDatabase(requireContext())
+            val bitmap = captureScreenshot()
+            if (bitmap != null) {
+                pendingBitmap = bitmap
+                binding.ivSavePreview.setImageBitmap(bitmap)
+                
+                // Show area in preview
+                val area = if (anchors.size >= 3) viewModel.currentAreaSqFt.value else 0.0
+                binding.tvPreviewArea.text = String.format(Locale.getDefault(), "%.2f sq ft", area)
+                binding.tvPreviewArea.isVisible = anchors.size >= 3
+
+                binding.layoutSavePreview.isVisible = true
+            } else {
+                Toast.makeText(context, "Failed to capture preview", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun finalizeSave() {
+        val bitmap = pendingBitmap ?: return
+        val anchors = viewModel.anchors.value
+        
+        lifecycleScope.launch {
+            val imagePath = saveBitmapToInternalStorage(bitmap)
+            saveImageToGallery(bitmap)
             
+            val db = AppDatabase.getDatabase(requireContext())
             val isPolygon = anchors.size >= 3
             val shape = if (isPolygon) "AR Polygon" else "AR Distance"
             
@@ -167,8 +207,20 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
                     imagePath = imagePath
                 ),
             )
-            Toast.makeText(context, "Saved with screenshot", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Saved successfully", Toast.LENGTH_SHORT).show()
             findNavController().popBackStack()
+        }
+    }
+
+    private suspend fun saveBitmapToInternalStorage(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        val file = File(requireContext().filesDir, "meas_${System.currentTimeMillis()}.jpg")
+        try {
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            }
+            file.absolutePath
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -203,7 +255,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         }
     }
 
-    private suspend fun captureAndSaveScreenshot(): String? = suspendCancellableCoroutine { continuation ->
+    private suspend fun captureScreenshot(): Bitmap? = suspendCancellableCoroutine { continuation ->
         val view = binding.surfaceView
         val bitmap = createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
         
@@ -212,29 +264,11 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         
         PixelCopy.request(view, bitmap, { result ->
             if (result == PixelCopy.SUCCESS) {
-                // Combine with overlay
                 val combinedBitmap = createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
                 val canvas = Canvas(combinedBitmap)
                 canvas.drawBitmap(bitmap, 0f, 0f, null)
                 binding.measurementOverlay.draw(canvas)
-                
-                // Save to internal storage for app use
-                val file = File(requireContext().filesDir, "meas_${System.currentTimeMillis()}.jpg")
-                
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        FileOutputStream(file).use { out ->
-                            combinedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                        }
-                        
-                        // Also save to Gallery
-                        saveImageToGallery(combinedBitmap)
-                        
-                        continuation.resume(file.absolutePath)
-                    } catch (_: Exception) {
-                        continuation.resume(null)
-                    }
-                }
+                continuation.resume(combinedBitmap)
             } else {
                 continuation.resume(null)
             }
@@ -319,7 +353,7 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
         val hit = arCoreManager.hitTestCenter(frame, binding.surfaceView.width, binding.surfaceView.height)
         val isPlaneFound = hit != null
         
-        // Live Instruction Logic
+        // Live Instruction & Dramatic Effect Logic
         if (viewModel.anchors.value.isEmpty()) {
             activity?.runOnUiThread {
                 val currentText = _binding?.tvInstruction?.text.toString()
@@ -328,14 +362,24 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
                 if (currentText != newText) {
                     _binding?.tvInstruction?.text = newText
                     if (isPlaneFound) {
-                        binding.tvInstruction.clearAnimation()
+                        _binding?.tvInstruction?.clearAnimation()
+                        _binding?.viewScanningVignette?.animate()?.alpha(0f)?.setDuration(500)?.start()
                     } else {
                         val animation = android.view.animation.AlphaAnimation(0.4f, 1.0f).apply {
                             duration = 800
                             repeatMode = android.view.animation.Animation.REVERSE
                             repeatCount = android.view.animation.Animation.INFINITE
                         }
-                        binding.tvInstruction.startAnimation(animation)
+                        _binding?.tvInstruction?.startAnimation(animation)
+                        
+                        _binding?.viewScanningVignette?.alpha = 1.0f
+                        _binding?.viewScanningVignette?.visibility = View.VISIBLE
+                        val vignetteAnim = android.view.animation.AlphaAnimation(0.3f, 1.0f).apply {
+                            duration = 1200
+                            repeatMode = android.view.animation.Animation.REVERSE
+                            repeatCount = android.view.animation.Animation.INFINITE
+                        }
+                        _binding?.viewScanningVignette?.startAnimation(vignetteAnim)
                     }
                 }
             }
@@ -346,6 +390,8 @@ class ArMeasureFragment : Fragment(), GLSurfaceView.Renderer {
             viewModel.addPoint(hit.createAnchor())
             addPointRequested = false
             activity?.runOnUiThread {
+                _binding?.viewScanningVignette?.clearAnimation()
+                _binding?.viewScanningVignette?.visibility = View.GONE
                 _binding?.surfaceView?.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
             }
         } else if (addPointRequested) {

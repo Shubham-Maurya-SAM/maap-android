@@ -23,13 +23,20 @@ class ArCoreManager private constructor(context: Context) {
         try {
             session = Session(appContext)
             val config = Config(session).apply {
+                // Focus on Horizontal for faster floor detection as requested, 
+                // but keep VERTICAL if we want both. 
+                // Using HORIZONTAL only is usually faster for floor.
                 planeFindingMode = Config.PlaneFindingMode.HORIZONTAL_AND_VERTICAL
                 focusMode = Config.FocusMode.AUTO
                 updateMode = Config.UpdateMode.LATEST_CAMERA_IMAGE
+                // Ensure Depth is used if available for faster detection
+                if (session?.isDepthModeSupported(Config.DepthMode.AUTOMATIC) == true) {
+                    depthMode = Config.DepthMode.AUTOMATIC
+                }
                 lightEstimationMode = Config.LightEstimationMode.DISABLED
             }
             session?.configure(config)
-            Log.d("ArCoreManager", "ARCore Session initialized")
+            Log.d("ArCoreManager", "ARCore Session initialized with Depth Support")
         } catch (e: Exception) {
             Log.e("ArCoreManager", "Failed to create ARCore session", e)
             return null
